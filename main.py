@@ -39,6 +39,8 @@ def main():
     parser.add_argument("--png", action="store_true", help="Save preview as PNG in addition to or instead of PPM")
     parser.add_argument("--grid", action="store_true", help="Overlay 100px grid of dots on preview")
     parser.add_argument("--numbers", action="store_true", help="Overlay index numbers at 100px grid points")
+    parser.add_argument("--highlight", action="store_true", help="Highlight high-intensity regions")
+    parser.add_argument("--highlight-p", type=float, default=99.0, help="Percentile for highlight threshold (e.g., 99.0)")
     parser.add_argument("--x", type=int, default=0, help="Crop x (column)")
     parser.add_argument("--y", type=int, default=0, help="Crop y (row)")
     parser.add_argument("--w", "--width", dest="width", type=int, default=256, help="Crop width")
@@ -72,6 +74,10 @@ def main():
         if args.numbers:
             from hsi_utils import overlay_grid_numbers
             rgb_grid = overlay_grid_numbers(rgb_grid, step=100, color=(255, 255, 0), offset=(2, 2), mode='xy')
+        if args.highlight:
+            from hsi_utils import overlay_high_intensity
+            # For preview-only, compute highlight from the full cube
+            rgb_grid = overlay_high_intensity(rgb_grid, cube=cube, header=header, percentile=args.highlight_p)
         grid_saved = []
         try:
             grid_saved.append(save_png_from_rgb(rgb_grid, out_base.with_name(out_base.name + '_grid').with_suffix('.png')))
@@ -111,6 +117,9 @@ def main():
     if args.numbers:
         from hsi_utils import overlay_grid_numbers
         rgb_main = overlay_grid_numbers(rgb_main, step=100, color=(255, 255, 0), offset=(2, 2), mode='xy')
+    if args.highlight:
+        from hsi_utils import overlay_high_intensity
+        rgb_main = overlay_high_intensity(rgb_main, cube=cube, header=header, percentile=args.highlight_p)
     if args.png:
         paths.append(save_png_from_rgb(rgb_main, out_base.with_suffix('.png')))
     else:
@@ -121,6 +130,9 @@ def main():
     if args.numbers:
         from hsi_utils import overlay_grid_numbers
         rgb_grid = overlay_grid_numbers(rgb_grid, step=100, color=(255, 255, 0), offset=(2, 2), mode='xy')
+    if args.highlight:
+        from hsi_utils import overlay_high_intensity
+        rgb_grid = overlay_high_intensity(rgb_grid, cube=cube, header=header, percentile=args.highlight_p)
     try:
         paths.append(save_png_from_rgb(rgb_grid, out_base.with_name(out_base.name + '_grid').with_suffix('.png')))
     except Exception:

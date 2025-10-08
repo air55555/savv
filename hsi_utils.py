@@ -400,6 +400,39 @@ def overlay_grid_dots(
     return out
 
 
+def overlay_high_intensity(
+    rgb: np.ndarray,
+    cube: Optional[np.ndarray] = None,
+    header: Optional[Dict[str, object]] = None,
+    percentile: float = 99.0,
+    color: Tuple[int, int, int] = (0, 255, 255),
+    alpha: float = 0.6,
+) -> np.ndarray:
+    """Highlight brightest regions using a percentile threshold.
+
+    If cube is provided, computes intensity as mean across bands and thresholds at the given percentile.
+    Otherwise uses the grayscale of the rgb image.
+    """
+    if rgb.ndim != 3 or rgb.shape[2] != 3:
+        raise ValueError('Expected HxWx3 RGB array')
+    base = rgb.astype(np.float32)
+    if cube is not None and cube.shape[:2] == rgb.shape[:2]:
+        # Use average over bands; cube may be memmap read-only
+        inten = np.mean(cube.astype(np.float32), axis=2)
+    else:
+        # Use RGB luminance
+        inten = 0.2126 * base[:, :, 0] + 0.7152 * base[:, :, 1] + 0.0722 * base[:, :, 2]
+    thresh = float(np.percentile(inten, percentile))
+    mask = inten >= thresh
+    out = base.copy()
+    r, g, b = color
+    # Alpha blend color where mask
+    out[mask, 0] = (1 - alpha) * out[mask, 0] + alpha * r
+    out[mask, 1] = (1 - alpha) * out[mask, 1] + alpha * g
+    out[mask, 2] = (1 - alpha) * out[mask, 2] + alpha * b
+    return out.astype(np.uint8)
+
+
 def _digit_font_5x3() -> Dict[str, np.ndarray]:
     # 5 rows x 3 cols bitmap font for digits 0-9 and comma, space
     patterns = {
@@ -623,6 +656,7 @@ __all__ = [
     'rgb_uint8_from_cube',
     'overlay_grid_dots',
     'overlay_grid_numbers',
+    'overlay_high_intensity',
     'save_ppm_from_rgb',
     'save_png_from_rgb',
     'load_crop_save_preview',
