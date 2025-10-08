@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="crop" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="crop higlite" type="PythonConfigurationType" factoryName="Python">
     <module name="savv" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
@@ -23,7 +23,7 @@
       </ENTRIES>
     </EXTENSION>
     <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
-    <option name="PARAMETERS" value="--hdr .\data\25092025_cheese_0027.hdr --x 200 --y 2300 --w 256 --h 256 --out .\data\crop_example --grid --numbers" />
+    <option name="PARAMETERS" value="--hdr .\data\25092025_cheese_0027.hdr --x 200 --y 2300 --w 256 --h 256 --out .\data\crop_example --grid --numbers --highlight --highlight-p 95.5" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="false" />
