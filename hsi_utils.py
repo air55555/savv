@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
+from PIL import Image
 
 import numpy as np
 
@@ -399,6 +400,168 @@ def overlay_grid_dots(
     return out
 
 
+def _digit_font_5x3() -> Dict[str, np.ndarray]:
+    # 5 rows x 3 cols bitmap font for digits 0-9 and comma, space
+    patterns = {
+        '0': [
+            '111',
+            '101',
+            '101',
+            '101',
+            '111',
+        ],
+        '1': [
+            '010',
+            '110',
+            '010',
+            '010',
+            '111',
+        ],
+        '2': [
+            '111',
+            '001',
+            '111',
+            '100',
+            '111',
+        ],
+        '3': [
+            '111',
+            '001',
+            '111',
+            '001',
+            '111',
+        ],
+        '4': [
+            '101',
+            '101',
+            '111',
+            '001',
+            '001',
+        ],
+        '5': [
+            '111',
+            '100',
+            '111',
+            '001',
+            '111',
+        ],
+        '6': [
+            '111',
+            '100',
+            '111',
+            '101',
+            '111',
+        ],
+        '7': [
+            '111',
+            '001',
+            '010',
+            '100',
+            '100',
+        ],
+        '8': [
+            '111',
+            '101',
+            '111',
+            '101',
+            '111',
+        ],
+        '9': [
+            '111',
+            '101',
+            '111',
+            '001',
+            '111',
+        ],
+        ',': [
+            '000',
+            '000',
+            '000',
+            '010',
+            '100',
+        ],
+        ' ': [
+            '000',
+            '000',
+            '000',
+            '000',
+            '000',
+        ],
+        'x': [
+            '101',
+            '010',
+            '010',
+            '010',
+            '101',
+        ],
+    }
+    font: Dict[str, np.ndarray] = {}
+    for ch, rows in patterns.items():
+        font[ch] = np.array([[1 if c == '1' else 0 for c in row] for row in rows], dtype=np.uint8)
+    return font
+
+
+_FONT_5x3 = _digit_font_5x3()
+
+
+def _draw_text(rgb: np.ndarray, text: str, top: int, left: int, color: Tuple[int, int, int]) -> None:
+    # Draw text using 5x3 font with 1px spacing horizontally and vertically
+    r0, g0, b0 = color
+    cursor_x = left
+    cursor_y = top
+    char_spacing = 1
+    for ch in text:
+        glyph = _FONT_5x3.get(ch)
+        if glyph is None:
+            glyph = _FONT_5x3[' ']
+        h, w = glyph.shape
+        y0 = cursor_y
+        y1 = min(rgb.shape[0], y0 + h)
+        x0 = cursor_x
+        x1 = min(rgb.shape[1], x0 + w)
+        gy1 = y1 - y0
+        gx1 = x1 - x0
+        if gy1 > 0 and gx1 > 0:
+            m = glyph[:gy1, :gx1].astype(bool)
+            sub = rgb[y0:y1, x0:x1]
+            sub[m, 0] = r0
+            sub[m, 1] = g0
+            sub[m, 2] = b0
+        cursor_x += w + char_spacing
+
+
+def overlay_grid_numbers(
+    rgb: np.ndarray,
+    step: int = 100,
+    color: Tuple[int, int, int] = (255, 255, 0),
+    offset: Tuple[int, int] = (2, 2),
+    mode: str = 'xy',
+) -> np.ndarray:
+    """Overlay index numbers near each grid point.
+
+    mode: 'xy' -> label as "x,y" (column,row), 'i' -> sequential index per point.
+    """
+    if rgb.ndim != 3 or rgb.shape[2] != 3:
+        raise ValueError('Expected HxWx3 RGB array')
+    out = rgb.copy()
+    h, w, _ = out.shape
+    oy, ox = offset
+    rr = list(range(0, h, max(step, 1)))
+    cc = list(range(0, w, max(step, 1)))
+    idx = 0
+    for y in rr:
+        for x in cc:
+            if mode == 'i':
+                label = str(idx)
+            else:
+                label = f"{x},{y}"
+            y_text = min(max(0, y + oy), h - 5)
+            x_text = min(max(0, x + ox), w - 3)
+            _draw_text(out, label, top=y_text, left=x_text, color=color)
+            idx += 1
+    return out
+
+
 def save_ppm_from_rgb(rgb: np.ndarray, out_path: str | os.PathLike) -> Path:
     if rgb.dtype != np.uint8:
         raise ValueError('RGB array must be uint8')
@@ -459,6 +622,7 @@ __all__ = [
     'save_rgb_preview_ppm',
     'rgb_uint8_from_cube',
     'overlay_grid_dots',
+    'overlay_grid_numbers',
     'save_ppm_from_rgb',
     'save_png_from_rgb',
     'load_crop_save_preview',

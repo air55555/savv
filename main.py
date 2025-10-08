@@ -38,6 +38,7 @@ def main():
     parser.add_argument("--preview-out", type=str, default=None, help="Path to save preview (defaults to alongside input)")
     parser.add_argument("--png", action="store_true", help="Save preview as PNG in addition to or instead of PPM")
     parser.add_argument("--grid", action="store_true", help="Overlay 100px grid of dots on preview")
+    parser.add_argument("--numbers", action="store_true", help="Overlay index numbers at 100px grid points")
     parser.add_argument("--x", type=int, default=0, help="Crop x (column)")
     parser.add_argument("--y", type=int, default=0, help="Crop y (row)")
     parser.add_argument("--w", "--width", dest="width", type=int, default=256, help="Crop width")
@@ -48,18 +49,38 @@ def main():
 
     if args.preview_only:
         cube, header, _ = load_envi(args.hdr)
-        # Build RGB, optional grid, then save as requested
+        # Build RGB, optional overlays, then save as requested
         rgb = rgb_uint8_from_cube(cube, header=header)
-        if args.grid:
-            rgb = overlay_grid_dots(rgb, step=100, color=(255, 0, 0), dot_size=1)
         out_base = Path(args.preview_out) if args.preview_out else Path(args.hdr).with_suffix('')
         saved_paths = []
+        # Primary output (respect --png vs PPM)
+        rgb_main = rgb
+        if args.grid:
+            rgb_main = overlay_grid_dots(rgb_main, step=100, color=(255, 0, 0), dot_size=1)
+        if args.numbers:
+            from hsi_utils import overlay_grid_numbers  # local import to avoid unused when not needed
+            rgb_main = overlay_grid_numbers(rgb_main, step=100, color=(255, 255, 0), offset=(2, 2), mode='xy')
         if args.png:
             png_path = out_base.with_suffix('.png')
-            saved_paths.append(save_png_from_rgb(rgb, png_path))
+            saved_paths.append(save_png_from_rgb(rgb_main, png_path))
         else:
             ppm_path = out_base.with_suffix('.ppm')
-            saved_paths.append(save_ppm_from_rgb(rgb, ppm_path))
+            saved_paths.append(save_ppm_from_rgb(rgb_main, ppm_path))
+
+        # Special grid outputs: always save an extra with `_grid` suffix
+        rgb_grid = overlay_grid_dots(rgb, step=100, color=(255, 0, 0), dot_size=1)
+        if args.numbers:
+            from hsi_utils import overlay_grid_numbers
+            rgb_grid = overlay_grid_numbers(rgb_grid, step=100, color=(255, 255, 0), offset=(2, 2), mode='xy')
+        grid_saved = []
+        try:
+            grid_saved.append(save_png_from_rgb(rgb_grid, out_base.with_name(out_base.name + '_grid').with_suffix('.png')))
+        except Exception:
+            # PNG optional (requires Pillow); continue even if unavailable
+            pass
+        grid_saved.append(save_ppm_from_rgb(rgb_grid, out_base.with_name(out_base.name + '_grid').with_suffix('.ppm')))
+        saved_paths.extend(grid_saved)
+
         for p in saved_paths:
             print(f"Opening preview: {p}")
             open_with_default_viewer(Path(p))
@@ -78,24 +99,37 @@ def main():
     )
 
     print(f"Cropped ENVI saved:\n  {hdr_out}\n  {raw_out}")
-    if args.grid or args.png:
-        # Regenerate preview with requested options
-        cube, header, _ = load_envi(str(hdr_out))
-        rgb = rgb_uint8_from_cube(cube, header=header)
-        if args.grid:
-            rgb = overlay_grid_dots(rgb, step=100, color=(255, 0, 0), dot_size=1)
-        out_base = Path(args.out)
-        paths = []
-        if args.png:
-            paths.append(save_png_from_rgb(rgb, out_base.with_suffix('.png')))
-        else:
-            paths.append(save_ppm_from_rgb(rgb, out_base.with_suffix('.ppm')))
-        for p in paths:
-            print(f"Opening preview: {p}")
-            open_with_default_viewer(Path(p))
+    # Regenerate preview(s) with requested options
+    cube, header, _ = load_envi(str(hdr_out))
+    rgb = rgb_uint8_from_cube(cube, header=header)
+    out_base = Path(args.out)
+    paths = []
+    # Primary output (respect --png vs PPM); grid if requested
+    rgb_main = rgb
+    if args.grid:
+        rgb_main = overlay_grid_dots(rgb_main, step=100, color=(255, 0, 0), dot_size=1)
+    if args.numbers:
+        from hsi_utils import overlay_grid_numbers
+        rgb_main = overlay_grid_numbers(rgb_main, step=100, color=(255, 255, 0), offset=(2, 2), mode='xy')
+    if args.png:
+        paths.append(save_png_from_rgb(rgb_main, out_base.with_suffix('.png')))
     else:
-        print(f"Opening preview: {preview}")
-        open_with_default_viewer(Path(preview))
+        paths.append(save_ppm_from_rgb(rgb_main, out_base.with_suffix('.ppm')))
+
+    # Special grid outputs: always save an extra with `_grid` suffix
+    rgb_grid = overlay_grid_dots(rgb, step=100, color=(255, 0, 0), dot_size=1)
+    if args.numbers:
+        from hsi_utils import overlay_grid_numbers
+        rgb_grid = overlay_grid_numbers(rgb_grid, step=100, color=(255, 255, 0), offset=(2, 2), mode='xy')
+    try:
+        paths.append(save_png_from_rgb(rgb_grid, out_base.with_name(out_base.name + '_grid').with_suffix('.png')))
+    except Exception:
+        pass
+    paths.append(save_ppm_from_rgb(rgb_grid, out_base.with_name(out_base.name + '_grid').with_suffix('.ppm')))
+
+    for p in paths:
+        print(f"Opening preview: {p}")
+        open_with_default_viewer(Path(p))
 
 
 if __name__ == "__main__":
