@@ -4,7 +4,7 @@ from typing import Dict, List, Tuple, Optional
 
 import numpy as np
 
-from hsi_utils import load_envi
+from hsi_utils import load_envi, save_envi
 
 
 def build_mask_from_cube(cube: np.ndarray, percentile: float) -> np.ndarray:
@@ -122,6 +122,7 @@ def main():
     parser.add_argument('--percentile', type=float, default=95.5, help='Percentile for highlight mask if recomputing from cube')
     parser.add_argument('--out-dir', type=str, default='data', help='Directory to save spectra outputs')
     parser.add_argument('--stem', type=str, default='crop', help='Output file name stem prefix')
+    parser.add_argument('--subtract-csv', type=str, default=None, help='Path to spectra CSV to subtract and save residual cubes')
     args = parser.parse_args()
 
     cube, header, _ = load_envi(args.hdr)
@@ -151,6 +152,45 @@ def main():
     for p in plots:
         print(f'  {p}')
     print(f'  {csv_path}')
+
+    # Optional: subtract provided CSV spectra from the cube and save residuals
+    if args.subtract_csv:
+        csv_file = Path(args.subtract_csv)
+        if not csv_file.exists():
+            raise FileNotFoundError(f"CSV not found: {csv_file}")
+        # Load CSV; first row is header
+        with csv_file.open('r', encoding='utf-8') as f:
+            header = f.readline().strip().split(',')
+        names = header[1:]  # skip wavelength/band column
+        data = np.loadtxt(csv_file, delimiter=',', skiprows=1)
+        # Handle case where CSV might be a single row
+        if data.ndim == 1:
+            data = data[None, :]
+        spectra_mat = data[:, 1:]  # drop first column (x)
+        # Validate dimensions
+        if spectra_mat.shape[0] != len(np.unique(np.arange(spectra_mat.shape[0]))):
+            pass  # no-op, just clarity
+        if spectra_mat.shape[0] != data.shape[0]:
+            raise ValueError('Unexpected CSV shape after parsing.')
+        # Transpose if needed to get shape (bands,) per method
+        # Here each column corresponds to a method; rows correspond to x-axis values
+        # So for a given method i, spectra_mat[:, i] is length==bands
+        bands = cube.shape[2]
+        if spectra_mat.shape[0] != bands:
+            raise ValueError(f'CSV spectra length {spectra_mat.shape[0]} does not match cube bands {bands}')
+
+        # Map names to safe suffixes
+        def safe_suffix(name: str) -> str:
+            return name.lower().replace(' ', '_')
+
+        # Subtract and save residual cubes
+        for i, name in enumerate(names):
+            spec = spectra_mat[:, i].astype(cube.dtype, copy=False)
+            # Broadcast subtract over H and W: (H,W,B) - (B,) -> (H,W,B)
+            residual = cube.astype(np.float32) - spec.astype(np.float32)
+            out_base = out_dir / f"{args.stem}_residual_{safe_suffix(name)}"
+            save_envi(residual.astype(cube.dtype, copy=False), out_base_path=str(out_base), template_header={'wavelengths': wavelengths} if wavelengths else None)
+            print(f"Residual saved: {out_base.with_suffix('.hdr')} / {out_base.with_suffix('.raw')}")
 
 
 if __name__ == '__main__':
