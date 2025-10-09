@@ -284,8 +284,19 @@ def save_envi(
     else:
         raise ValueError('interleave must be one of bsq/bil/bip')
 
-    with open(raw_path, 'wb') as f:
-        to_write.astype(dt.newbyteorder('<'), copy=False).tofile(f)
+    try:
+        with open(raw_path, 'wb') as f:
+            to_write.astype(dt.newbyteorder('<'), copy=False).tofile(f)
+    except OSError as exc:
+        # On Windows, trying to overwrite a file that is currently memory-mapped
+        # (e.g., the input RAW still open via np.memmap) can raise OSError(22).
+        # Provide a clearer hint to the caller.
+        if getattr(exc, 'errno', None) == 22:
+            raise OSError(
+                f"Failed to open '{raw_path}' for writing. If this is also the input RAW, "
+                f"make sure it's not memory-mapped/open, or write to a different output base."
+            ) from exc
+        raise
 
     return hdr_path, raw_path
 
@@ -639,11 +650,20 @@ def load_crop_save_preview(
 
     Returns (cropped_hdr_path, cropped_raw_path, preview_path).
     """
-    cube, header, _ = load_envi(hdr_path)
+    cube, header, in_raw_path = load_envi(hdr_path)
     cropped = crop_cube(cube, x=x, y=y, width=width, height=height, band_range=band_range)
-    hdr_out, raw_out = save_envi(cropped, out_base_path=out_base_path, template_header=header, interleave=interleave)
+    # Avoid writing to the exact same base name as the source to prevent conflicts
+    # with an open memmap on Windows when overwriting the RAW file.
+    in_base = Path(in_raw_path).with_suffix('')
+    out_base = Path(out_base_path)
+    if out_base.suffix:
+        out_base = out_base.with_suffix('')
+    if out_base.resolve() == in_base.resolve():
+        out_base = out_base.with_name(out_base.name + '_crop')
+
+    hdr_out, raw_out = save_envi(cropped, out_base_path=out_base, template_header=header, interleave=interleave)
     if rgb_preview_path is None:
-        rgb_preview_path = str(Path(out_base_path).with_suffix('.ppm'))
+        rgb_preview_path = str(out_base.with_suffix('.ppm'))
     preview_out = save_rgb_preview_ppm(cropped, out_path=rgb_preview_path, header=header)
     return hdr_out, raw_out, preview_out
 

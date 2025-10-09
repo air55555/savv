@@ -140,8 +140,9 @@ def main():
     paths.append(save_ppm_from_rgb(rgb_grid, out_base.with_name(out_base.name + '_grid').with_suffix('.ppm')))
 
     for p in paths:
-        print(f"Opening preview: {p}")
-        open_with_default_viewer(Path(p))
+        if p.suffix == '.png':
+            print(f"Opening preview: {p}")
+            open_with_default_viewer(Path(p))
 
 
 if __name__ == "__main__":
