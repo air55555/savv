@@ -4,7 +4,7 @@ Command-line utilities and helpers for working with ENVI-format hyperspectral cu
 
 ### Installation
 
-- Python 3.8+
+- Python 3.8
 - Required: `numpy`
 - Optional (for PNG output): `pillow`
 
