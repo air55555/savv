@@ -187,9 +187,19 @@ def main():
         for i, name in enumerate(names):
             spec = spectra_mat[:, i].astype(cube.dtype, copy=False)
             # Broadcast subtract over H and W: (H,W,B) - (B,) -> (H,W,B)
-            residual = cube.astype(np.float32) - spec.astype(np.float32)
+            residual = (cube.astype(np.float32) / spec.astype(np.float32) )*100
             out_base = out_dir / f"{args.stem}_residual_{safe_suffix(name)}"
             save_envi(residual.astype(cube.dtype, copy=False), out_base_path=str(out_base), template_header={'wavelengths': wavelengths} if wavelengths else None)
+            # Ensure ENVI header contains a default RGB triplet for viewers
+            hdr_path = out_base.with_suffix('.hdr')
+            try:
+                txt = hdr_path.read_text(encoding='utf-8', errors='ignore')
+                if 'default bands' not in txt.lower():
+                    with hdr_path.open('a', encoding='utf-8') as f:
+                        f.write('default bands = {165, 104, 44}\n')
+            except OSError:
+                # If header is not accessible, skip silently
+                pass
             print(f"Residual saved: {out_base.with_suffix('.hdr')} / {out_base.with_suffix('.raw')}")
 
 
