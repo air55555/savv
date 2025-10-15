@@ -7,3 +7,4 @@ file type = ENVI Standard
 data type = 12
 interleave = bsq
 byte order = 0
+default bands = {165, 104, 44}
